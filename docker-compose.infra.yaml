@@ -1,0 +1,51 @@
+services:
+    postgres:
+        image: postgres:16.3-alpine3.20
+        container_name: showcase--postgres
+        # NOTE: User postgres is used to avoid the following error:
+        # "FATAL: role "root" does not exist docker postgres"
+        user: postgres
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_DB: postgres
+            PGPORT: 5432
+        volumes:
+            - type: volume
+              source: showcase--postgres--data
+              target: /var/lib/postgresql/data
+        ports:
+            - host_ip: 0.0.0.0
+              # NOTE: Port 5433 is used to avoid conflict with local PostgreSQL installation
+              published: 5433 # host
+              target: 5432 # container
+              protocol: tcp
+              mode: host
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready"]
+            interval: 5s
+
+    # DB connection URL:
+    # postgres://postgres:postgres@showcase--postgres:5432/postgres
+    # Browser URL:
+    # http://localhost:8081/?pgsql=showcase--postgres%3A5432&username=postgres&db=postgres&ns=public&select=keys
+    adminer:
+        image: adminer:4.8.1-standalone
+        container_name: showcase--adminer
+        ports:
+            - host_ip: 0.0.0.0
+              published: 8081 # host
+              target: 8080 # container
+              protocol: tcp
+              mode: host
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+volumes:
+    showcase--postgres--data:
+        name: showcase--postgres--data
+
+networks:
+    default:
+        name: showcase--network--default
