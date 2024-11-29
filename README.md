@@ -1,4 +1,12 @@
-# template--nx-nestjs--basic
+# showcase--nx-nestjs--typeorm-postgresql
+
+## Showcase
+
+1. Run `pnpm install`
+2. Copy `.env.template` as `.env` and add/change values if needed
+3. Start the infra and run migrations using `./scripts/docker-infra-up-sync.sh` or inspect it and run commands manually
+4. Run the app using `pnpm exec nx run app-nest-1:serve`
+5. Enable "REST Client" extension in VSCode and run the requests in `./api/requests.http` file
 
 ## Local development
 
@@ -176,4 +184,26 @@ pnpm exec nx show projects
 pnpm exec nx show project app-nest-1
 pnpm exec nx show --json project app-nest-1
 pnpm exec nx show --json project app-nest-1 | jq
+```
+
+### Migrations
+
+```bash
+# Show TypeORM CLI command help
+npm run typeorm -- --help
+
+# Create a new blank migration
+npm run typeorm -- migration:create ./apps/app-nest-1/src/migrations/<migration-name>
+
+# Generate a new migration based on the changes in the entity files
+npm run typeorm-ds -- migration:generate ./apps/app-nest-1/src/migrations/<migration-name>
+
+# Run migrations
+npm run typeorm-ds -- migration:run
+
+# Revert the last migration
+npm run typeorm-ds -- migration:revert
+
+# Show status of all migrations
+npm run typeorm-ds -- migration:show
 ```
