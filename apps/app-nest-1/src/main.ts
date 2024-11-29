@@ -5,17 +5,22 @@
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
-
-import { AppModule } from './app/app.module';
+import {
+  ConfigModule,
+  // ConfigService
+} from '@nestjs/config';
+import { CoreModule } from './modules/core/core.module';
 
 async function bootstrap() {
   await ConfigModule.envVariablesLoaded;
-  // console.log(process.env['GREETING']);
+  const app = await NestFactory.create(CoreModule);
 
-  const app = await NestFactory.create(AppModule);
   const globalPrefix = 'api';
   app.setGlobalPrefix(globalPrefix);
+
+  // const config = app.get(ConfigService);
+  // console.log(config.get('core.db.synchronize'));
+
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
   const port = Number(process.env['PORT']) || 3000;
   await app.listen(port);
