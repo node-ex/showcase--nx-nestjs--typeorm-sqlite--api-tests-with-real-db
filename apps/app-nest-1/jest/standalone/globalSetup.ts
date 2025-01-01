@@ -2,7 +2,7 @@ import type { Config } from '@jest/types';
 import { debug as _debug } from 'debug';
 import { createCliDataSource } from '../../src/shared/utils/cli-data-source.utils';
 
-const debug = _debug('jest-postgres:setup:custom');
+const debug = _debug('jest-sqlite:setup:custom');
 
 /**
  * Important steps:

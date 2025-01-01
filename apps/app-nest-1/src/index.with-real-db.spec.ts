@@ -1,6 +1,6 @@
 import { debug as _debug } from 'debug';
 
-const debug = _debug('jest-postgres:test');
+const debug = _debug('jest-sqlite:test');
 
 describe('Index', () => {
   it('test1', async () => {

@@ -7,7 +7,7 @@ import { debug as _debug } from 'debug';
 import { createHash } from 'crypto';
 import { Client } from 'pg';
 
-const debug = _debug('jest-postgres:environment:custom');
+const debug = _debug('jest-sqlite:environment:custom');
 
 export default class TestEnvironment extends NodeEnvironment {
   testFilePath: string;

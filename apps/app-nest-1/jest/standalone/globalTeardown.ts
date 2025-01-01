@@ -1,7 +1,7 @@
 import type { Config } from '@jest/types';
 import { debug as _debug } from 'debug';
 
-const debug = _debug('jest-postgres:teardown:custom');
+const debug = _debug('jest-sqlite:teardown:custom');
 
 /**
  * Important steps:

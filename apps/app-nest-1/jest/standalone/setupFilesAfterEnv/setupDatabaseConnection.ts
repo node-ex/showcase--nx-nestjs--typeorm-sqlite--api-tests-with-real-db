@@ -6,7 +6,7 @@ import { debug as _debug } from 'debug';
 import { Client } from 'pg';
 
 const debug = _debug(
-  'jest-postgres:setupFilesAfterEnv:setupDatabaseConnection',
+  'jest-sqlite:setupFilesAfterEnv:setupDatabaseConnection',
 );
 
 /**
