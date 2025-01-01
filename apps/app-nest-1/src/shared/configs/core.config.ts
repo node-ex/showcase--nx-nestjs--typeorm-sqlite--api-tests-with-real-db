@@ -9,24 +9,14 @@ import { validateEnvVars } from './validate.utils';
  */
 
 const CORE_ENV_VAR_NAMES = {
-  DB_HOST: 'DB_HOST',
-  DB_PORT: 'DB_PORT',
-  DB_USERNAME: 'DB_USERNAME',
-  DB_PASSWORD: 'DB_PASSWORD',
-  DB_DATABASE: 'DB_DATABASE',
+  DB_DATABASE_FILEPATH: 'DB_DATABASE_FILEPATH',
   DB_SYNCHRONIZE: 'DB_SYNCHRONIZE',
 } as const;
 
 type CoreEnvVarNames = keyof typeof CORE_ENV_VAR_NAMES;
 
 const CoreEnvVarsSchema = z.object({
-  DB_HOST: z.string(),
-  DB_PORT: z.string().refine((value) => isStringParsableToInteger(value), {
-    message: 'DB_PORT must be an integer',
-  }),
-  DB_USERNAME: z.string(),
-  DB_PASSWORD: z.string(),
-  DB_DATABASE: z.string(),
+  DB_DATABASE_FILEPATH: z.string(),
   DB_SYNCHRONIZE: z
     .string()
     .refine((value) => ['true', 'false'].includes(value), {
@@ -48,11 +38,7 @@ const CORE_CONFIG_NAMESPACE = 'core';
 
 const CoreConfigSchema = z.object({
   db: z.object({
-    host: z.string(),
-    port: z.number(),
-    username: z.string(),
-    password: z.string(),
-    database: z.string(),
+    databaseFilepath: z.string(),
     synchronize: z.boolean(),
   }),
 });
@@ -68,11 +54,7 @@ export const coreConfig = registerAs(
   () =>
     ({
       db: {
-        host: process.env[CORE_ENV_VAR_NAMES.DB_HOST]!,
-        port: parseInt(process.env[CORE_ENV_VAR_NAMES.DB_PORT]!),
-        username: process.env[CORE_ENV_VAR_NAMES.DB_USERNAME]!,
-        password: process.env[CORE_ENV_VAR_NAMES.DB_PASSWORD]!,
-        database: process.env[CORE_ENV_VAR_NAMES.DB_DATABASE]!,
+        databaseFilepath: process.env[CORE_ENV_VAR_NAMES.DB_DATABASE_FILEPATH]!,
         synchronize: process.env[CORE_ENV_VAR_NAMES.DB_SYNCHRONIZE] === 'true',
       },
     } satisfies CoreConfig),

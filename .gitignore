@@ -392,5 +392,4 @@ Thumbs.db
 !.env.template
 !.env.*.template
 
-# Backups
-backups
+databases

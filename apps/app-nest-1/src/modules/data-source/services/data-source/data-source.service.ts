@@ -21,12 +21,8 @@ export class DataSourceService {
 
   getDataSourceOptions(loadEntitiesUsingPaths = false): DataSourceOptions {
     return {
-      type: 'postgres',
-      host: this.injectedCoreConfig.db.host,
-      port: this.injectedCoreConfig.db.port,
-      username: this.injectedCoreConfig.db.username,
-      password: this.injectedCoreConfig.db.password,
-      database: this.injectedCoreConfig.db.database,
+      type: 'sqlite',
+      database: this.injectedCoreConfig.db.databaseFilepath,
       /*
        * This only properly works when running TypeORM CLI commands
        * using ts-node. When running NestJS app using NestJS CLI, JS code would

@@ -1,15 +1,16 @@
-# showcase--nx-nestjs--typeorm-postgresql--api-tests-with-real-db
+# showcase--nx-nestjs--typeorm-sqlite--api-tests-with-real-db
 
 ## Showcase
 
 1. Install dependencies using `pnpm install`
 2. Copy `.env.template` as `.env` and add/change values if needed
-3. Start the infra and run migrations using `./scripts/docker-infra-up-sync.sh`
+3. Run migrations using `npm run typeorm-ds -- migration:run`
+   - If SQLite database file does not exist, it will be created
 4. Run the tests using `pnpm exec nx test app-nest-1`
 5. Troubleshoot tests using the following command
 
 ```bash
-npx nx reset && DEBUG=jest-postgres:* pnpm exec nx test app-nest-1 --verbose -- --detectOpenHandles
+npx nx reset && DEBUG=jest-sqlite:* pnpm exec nx test app-nest-1 --verbose -- --detectOpenHandles
 ```
 
 ## Local development
