@@ -5,9 +5,13 @@ import type {
 import { TestEnvironment as NodeEnvironment } from 'jest-environment-node';
 import { debug as _debug } from 'debug';
 import { createHash } from 'crypto';
-import { Client } from 'pg';
+import dotenv from 'dotenv';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 
-const debug = _debug('jest-postgres:environment:custom');
+dotenv.config();
+
+const debug = _debug('jest-sqlite:environment:custom');
 
 export default class TestEnvironment extends NodeEnvironment {
   testFilePath: string;
@@ -23,10 +27,7 @@ export default class TestEnvironment extends NodeEnvironment {
 
   /**
    * Important steps:
-   * - Create and connect a new pg Client for the system database
-   * - Terminate all connections to the template database
-   * - Create a new test database from the template database
-   * - Store a reference to the pg Client for the system database in globalThis
+   * - Copy template database file as a test database file
    * - Set environment variables of the isolated test context to values required to connect to the test database
    */
   override async setup() {
@@ -34,86 +35,62 @@ export default class TestEnvironment extends NodeEnvironment {
 
     debug('standalone TestEnvironment.setup');
 
-    const host = process.env['DB_HOST']!;
-    const port = parseInt(process.env['DB_PORT']!, 10);
-    const username = process.env['DB_USERNAME']!;
-    const password = process.env['DB_PASSWORD']!;
-    const templateDatabase = process.env['DB_DATABASE']!;
-    const systemDatabase = 'postgres';
-    debug('host', host);
-    debug('port', port);
-    debug('username', username);
-    debug('password', password);
-    debug('templateDatabase', templateDatabase);
+    const templateDatabaseFilepath = process.env['DB_DATABASE_FILEPATH']!;
+    const testDatabaseFolder = process.env['DB_TEST_DATABASE_FOLDER']!;
+    debug('templateDatabaseFilepath', templateDatabaseFilepath);
+    debug('testDatabaseFolder', testDatabaseFolder);
 
     /**
-     * When creating a new database via a template database, the
-     * template database must not have any connections to it.
-     */
-    const client = new Client({
-      host,
-      port,
-      user: username,
-      password,
-      database: systemDatabase,
-    });
-    await client.connect();
-    await client.query(
-      `
-      SELECT pg_terminate_backend(pg_stat_activity.pid)
-      FROM pg_stat_activity
-      WHERE pg_stat_activity.datname = $1
-        AND pid <> pg_backend_pid();
-    `,
-      [templateDatabase],
-    );
-
-    /**
-     * Requirements for the DB name:
-     * - Can contain only ASCII characters
-     * - Must be at least 1 character long and no more than 64 bytes long
+     * Requirements for the SQLite DB filename are based on the underlying
+     * filesystem's filename constraints.
      *
      * MD5 hash in a hexadecimal format is 32 characters long and contains only
-     * ASCII letters and numbers, so it should be a valid DB name.
-     *
-     * Sources
-     * - https://www.postgresql.org/docs/current/datatype-character.html
-     *   - See the name type documentation
+     * ASCII letters and numbers, so it should be a valid DB filename on all
+     * major operating systems.
      */
-    const dbName =
-      'test_' + createHash('md5').update(this.testFilePath).digest('hex');
-    await client.query(
-      /* Copies not only the DDL, but also the data, last SEQUENCE numbers, etc. */
-      `CREATE DATABASE ${dbName} TEMPLATE ${templateDatabase}`,
-    );
+    const testDatabaseFilename =
+      'db_test_' + createHash('md5').update(this.testFilePath).digest('hex') + '.sqlite';
+    const testDatabaseFilepath = path.join(testDatabaseFolder, testDatabaseFilename);
 
-    globalThis.__PG_CLIENT_SYSTEM_DB__ = client;
+    try {
+      await fs.stat(templateDatabaseFilepath);
+    } catch (e: unknown) {
+      const error = e as any;
+      if (error?.code === 'ENOENT') {
+        const errorMessage = `ERROR: Template database file does not exist: ${templateDatabaseFilepath}`;
+        debug(errorMessage);
+      }
+
+      debug(error.message)
+      throw e;
+    }
+    /**
+     * Copied data will be deleted in the `setupFilesAfterEnv` `beforeEach` hook
+     */
+    await fs.copyFile(templateDatabaseFilepath, testDatabaseFilepath);
 
     /**
-     * When DB_HOST, DB_PORT, and DB_DATABASE are set via process.env here,
-     * tests do not see this change because they are run inside the
+     * When DB__* environment variables are set via process.env here,
+     * tests do not see this change because they run inside the
      * `this.global` vm context that is isolated from the global Node.js
      * context. Only environment variables present in the global Node.js
      * context (process.env) at the time of isolated context creation are
      * available to the tests.
      *
-     * But setting them via this.global.process.env works.
+     * this.global allows to access isolated context used for running tests.
      */
-    this.global.process.env['DB_HOST'] = host;
-    this.global.process.env['DB_PORT'] = port.toString();
-    this.global.process.env['DB_DATABASE'] = dbName;
+    this.global.process.env['DB_DATABASE_FILEPATH'] = testDatabaseFilepath;
 
-    debug('process.env[DB_DATABASE]', process.env['DB_DATABASE']);
+    debug('process.env[DB_DATABASE_FILEPATH]', process.env['DB_DATABASE_FILEPATH']);
     debug(
-      'this.global.process.env[DB_DATABASE]',
-      this.global.process.env['DB_DATABASE'],
+      'this.global.process.env[DB_DATABASE_FILEPATH]',
+      this.global.process.env['DB_DATABASE_FILEPATH'],
     );
   }
 
   /**
    * Important steps:
-   * - Drop the test database (there should be no connections to it)
-   * - Terminate the pg Client connection to the system database
+   * - Delete the test database file from the filesystem
    */
   override async teardown() {
     debug('standalone TestEnvironment.teardown - before super');
@@ -121,15 +98,28 @@ export default class TestEnvironment extends NodeEnvironment {
     debug('standalone TestEnvironment.teardown - after super');
 
     debug(
-      "this.global.process.env['DB_DATABASE']",
-      this.global.process.env['DB_DATABASE'],
+      "this.global.process.env['DB_DATABASE_FILEPATH']",
+      this.global.process.env['DB_DATABASE_FILEPATH'],
     );
 
-    const dbName = this.global.process.env['DB_DATABASE']!;
-    const client = globalThis.__PG_CLIENT_SYSTEM_DB__;
-    /* Parameterized placeholders cannot be used for database, table, or column names */
-    await client.query(`DROP DATABASE IF EXISTS ${dbName}`);
-    await client.end();
+    const testDatabaseFilepath = this.global.process.env['DB_DATABASE_FILEPATH']!;
+
+    try {
+      await fs.stat(testDatabaseFilepath);
+    } catch (e: unknown) {
+      const error = e as any;
+      let originalErrorMessage = error.message;
+      if (error?.code === 'ENOENT') {
+        const errorMessage = `ERROR: Test database file does not exist: ${testDatabaseFilepath}`;
+        debug(errorMessage);
+        error.message = errorMessage;
+      }
+
+      debug(originalErrorMessage)
+      throw e;
+    }
+
+    await fs.unlink(testDatabaseFilepath);
   }
 
   override getVmContext() {

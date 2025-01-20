@@ -3,10 +3,10 @@ import { configModuleImports } from '../../../src/shared/imports/config-module.i
 import { typeOrmModuleImports } from '../../../src/shared/imports/typeorm-module.imports';
 import { DataSource } from 'typeorm';
 import { debug as _debug } from 'debug';
-import { Client } from 'pg';
+import Database from 'better-sqlite3';
 
 const debug = _debug(
-  'jest-postgres:setupFilesAfterEnv:setupDatabaseConnection',
+  'jest-sqlite:setupFilesAfterEnv:setupDatabaseConnection',
 );
 
 /**
@@ -14,8 +14,8 @@ const debug = _debug(
  * - Create a new NestJS app for accessing the TypeORM DataSource
  * - Retrieve the initialized TypeORM DataSource for the test database from the app's DI container
  * - Store a reference to the TypeORM DataSource for the test database in globalThis
- * - Create and connect a new pg Client for the test database
- * - Store a reference to the pg Client for the test database in globalThis
+ * - Create and connect a new better-sqlite3 Database for the test database
+ * - Store a reference to the better-sqlite3 Database for the test database in globalThis
  */
 beforeAll(async () => {
   /**
@@ -28,29 +28,17 @@ beforeAll(async () => {
 
   const dataSource = app.get(DataSource);
   debug('dataSource.isInitialized', dataSource.isInitialized);
-  globalThis.__TYPEORM_DATA_SOURCE_TEST_DB__ = dataSource;
+  globalThis.__TYPEORM_DATA_SOURCE_TEST_DATABASE__ = dataSource;
 
-  const host = process.env['DB_HOST']!;
-  const port = process.env['DB_PORT']!;
-  const username = process.env['DB_USERNAME']!;
-  const password = process.env['DB_PASSWORD']!;
-  const testDatabase = process.env['DB_DATABASE']!;
-  debug('host', host);
-  debug('port', port);
-  debug('username', username);
-  debug('password', password);
-  debug('testDatabase', testDatabase);
+  const testDatabaseFilepath = process.env['DB_DATABASE_FILEPATH']!;
+  debug('testDatabaseFilepath', testDatabaseFilepath);
 
-  const client = new Client({
-    host,
-    port: parseInt(port, 10),
-    user: username,
-    password,
-    database: testDatabase,
+  const database = new Database(testDatabaseFilepath, {
+    verbose: console.log,
+    fileMustExist: false,
   });
 
-  await client.connect();
-  globalThis.__PG_CLIENT_TEST_DB__ = client;
+  globalThis.__BETTER_SQLITE3_DATABASE_TEST_DATABASE__ = database;
 });
 
 /**
@@ -60,65 +48,37 @@ beforeAll(async () => {
 beforeEach(async () => {
   debug('deleting data from all tables');
 
-  const dataSource = globalThis.__TYPEORM_DATA_SOURCE_TEST_DB__;
-  const truncateAllTablesSql = `
-    DO $$
-    DECLARE
-        tbl RECORD;
-        rows_deleted INT;
-    BEGIN
-        -- Start a transaction
-        BEGIN
-            -- Loop through all tables in the current database
-            FOR tbl IN
-                SELECT tablename
-                FROM pg_tables
-                WHERE schemaname = 'public'
-            LOOP
-                BEGIN
-                    -- Disable all triggers on the current table
-                    EXECUTE format('ALTER TABLE public.%I DISABLE TRIGGER ALL;', tbl.tablename);
+  const dataSource = globalThis.__TYPEORM_DATA_SOURCE_TEST_DATABASE__;
 
-                    -- Delete all data from the current table
-                    EXECUTE format('DELETE FROM public.%I;', tbl.tablename);
+  const { foreign_keys: foreignKeysPragmaValue } = (
+    await dataSource.query('PRAGMA foreign_keys;')
+  )[0];
+  await dataSource.query('PRAGMA foreign_keys=0;');
 
-                    -- Get the number of rows deleted
-                    GET DIAGNOSTICS rows_deleted = ROW_COUNT;
-                    IF rows_deleted > 0 THEN
-                        RAISE NOTICE 'Deleted % rows from table: %', rows_deleted, tbl.tablename;
-                    END IF;
+  const tables = await dataSource.query(
+    'SELECT name FROM sqlite_master WHERE type="table" ORDER BY name;'
+  );
 
-                    -- Re-enable all triggers on the current table
-                    EXECUTE format('ALTER TABLE public.%I ENABLE TRIGGER ALL;', tbl.tablename);
-                EXCEPTION
-                    WHEN OTHERS THEN
-                        -- In case of an error, re-enable triggers and raise the error
-                        EXECUTE format('ALTER TABLE public.%I ENABLE TRIGGER ALL;', tbl.tablename);
-                        RAISE NOTICE 'An error occurred while processing table: % - Error: %', tbl.tablename, SQLERRM;
-                        RAISE;
-                END;
-            END LOOP;
-        END;
+  /*
+   * Data is deleted from all tables in the beforeEach hook and not in the
+   * afterEach hook to delete data copied from the template database before
+   * the first test is run.
+   */
+  for (const table of tables) {
+    await dataSource.query(`DELETE FROM ${table.name};`);
+  }
 
-        RAISE NOTICE 'All tables processed successfully.';
-    EXCEPTION
-        WHEN OTHERS THEN
-            -- Rollback the transaction if any error occurs
-            RAISE NOTICE 'Transaction rolled back because an error occurred: %', SQLERRM;
-            ROLLBACK;
-            RAISE;
-    END $$;
-  `;
-  await dataSource.query(truncateAllTablesSql);
+  await dataSource.query(`PRAGMA foreign_keys=${foreignKeysPragmaValue};`);
+
   debug('data deleted from all tables');
 });
 
 /**
  * Important steps:
  * - Destroy the TypeORM DataSource for the test database
- * - End the pg Client connection for the test database
+ * - Close the better-sqlite3 Database for the test database
  */
 afterAll(async () => {
-  await globalThis.__TYPEORM_DATA_SOURCE_TEST_DB__.destroy();
-  await globalThis.__PG_CLIENT_TEST_DB__.end();
+  await globalThis.__TYPEORM_DATA_SOURCE_TEST_DATABASE__.destroy();
+  globalThis.__BETTER_SQLITE3_DATABASE_TEST_DATABASE__.close();
 });
